@@ -1,0 +1,46 @@
+#Simulate using Provable results (result_array)
+
+super_array = []
+for r in 1:9 
+    stack_array = []
+    print(r, ": ")
+        bet_amt = 0.2
+        tx_cost = 0.000025
+        stack = 0 #initial value of ETH stack
+        X = 1 #set 'bet under' amount (setting X as 1 == 'bet under' 2)
+        for i in collect(1:Int64(length(result_array)))
+            cnt = 0
+            bet = 0
+            if result_array[i] == X #prompt the iterative betting
+                bet += bet_amt + tx_cost #make bet
+                stack -= bet #subtract bet from stack
+                i += 1 #move ahead one result in result_array
+
+                #iterate over next results, for run of r, betting each time
+                while result_array[i] !== X && cnt <= r && i !== length(result_array)
+                    #print(bet)
+                    if bet > 0.2
+                        bet = bet*1.5 - tx_cost #update bet — TESTING FOR INCREMENTAL STRATEGY
+                        if bet < 0.2 #this loop is used if you want t have bet amount decrease iteratively
+                            bet = 0.2
+                        end
+                    end
+                    stack -= bet
+                    cnt += 1
+                    i += 1
+                    push!(stack_array, stack)
+                end
+                cnt = 0
+                if result_array[i] == X
+                    stack += bet * (99 - X)/X + bet_amt 
+                end
+                push!(stack_array, stack)
+            end
+        end
+    push!(super_array, stack_array)
+    println(round(stack, digits=0))
+end
+
+nums = ["1" "2" "3" "4" "5" "6" "7" "8" "9"]
+plot(super_array, lw = 2, label = nums,
+    ylab = "ETH won", xlab = "Number of bets", title = "Strategy performance")
