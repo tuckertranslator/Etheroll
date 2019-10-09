@@ -1,33 +1,55 @@
 using HTTP, JSON
 
+# to override with your Etherscan API key
+API_token = ""
+# first block to start from
+first_block = 6290000
+log_result_topic = "0x8dd0b145385d04711e29558ceab40b456976a2b9a7d648cc1bcd416161bf97b9"
+contract_address = "0xA52e014B3f5Cc48287c2D483A3E026C32cc76E6d"
 
-API_token = "" # to override with your Etherscan API key
-fb = 6290000 #first block to start from
 
-log_array = [] #for stroing event logs from API call
-for i in 1:400 #the logs come in batches of 1000 — get as many as possible
-    global fb
-    global API_token
-    print(i,", ")
-    link = "https://api.etherscan.io/api?module=logs&action=getLogs&fromBlock=$fb&toBlock=latest&address=0xa52e014b3f5cc48287c2d483a3e026c32cc76e6d&topic0=0x8dd0b145385d04711e29558ceab40b456976a2b9a7d648cc1bcd416161bf97b9&apikey=$API_token"
-
-    r = HTTP.request("GET", link)
-    r = String(r.body)
-
-    x = JSON.parse(r)["result"]
-    push!(log_array, x)
-    fb = parse(Int64, x[end]["blockNumber"]) + 1 #for tracking progress
-    println(fb) 
-    
+# gets logs from a given block
+function get_logs(from_block; to_block="latest")
+    get_logs_url = "https://api.etherscan.io/api?module=logs&action=getLogs"
+    url = "$get_logs_url&fromBlock=$from_block&toBlock=$to_block&address=$contract_address&topic0=$log_result_topic&apikey=$API_token"
+    response = HTTP.request("GET", url)
+    body = String(response.body)
+    JSON.parse(body)["result"]
 end
 
+# pulls batches of logs and concatenates to a resulting array
+function get_logs_batch(from_block, batch_count)
+    # for stroing event logs from API call
+    log_array = []
+    for i in 1:batch_count
+        print(i,", ")
+        logs = get_logs(from_block)
+        # going to the next batch
+        from_block = parse(Int64, logs[end]["blockNumber"]) + 1
+        println(from_block)
+        log_array = vcat(log_array, logs)
+    end
+    return log_array
+end
 
-result_array = Int64[] #for storing Oracle results
-for i in 1:length(log_array)
-    for j in 1:length(log_array[i])
-        result = parse(Int64, log_array[i][j]["data"][129:130], base = 16) #results stored in hex at index 129:130
+# extracts Oracle result number given an array of logs
+function extract_oracle_results(log_array)
+    # for storing Oracle results
+    result_array = Int64[]
+    for i in 1:length(log_array)
+        # results stored in hex at index 129:130
+        result = parse(Int64, log_array[i]["data"][129:130], base = 16)
         push!(result_array, result)
     end
+    # dropping failed transactions (result == 0)
+    filter!(x->x !== 0, result_array)
 end
-filter!(x->x !== 0, result_array) #results of 0 == failed tx
-print(result_array)
+
+
+function main()
+    log_array = get_logs_batch(first_block, 400)
+    result_array = extract_oracle_results(log_array)
+    print(result_array)
+end
+
+main()
